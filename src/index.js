@@ -1,16 +1,16 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const route = require("../src/routes/route");
+const route = require("../src/route/route");
 const mongoose = require("mongoose");
-const { AppConfig } = require("aws-sdk");
+// const { AppConfig } = require("aws-sdk");
 const app = express();
 
 app.use(bodyParser.json());
-app.use(multer().any());
+// app.use(multer().any());
 
 mongoose
     .connect(
-        "mongodb+srv://Ankita220296:Ankita704696@cluster0.d9vvv.mongodb.net/group12Database?retryWrites=true&w=majority",
+        "mongodb+srv://Amit7518:Amit7518@cluster0.rwmfg9t.mongodb.net/Project4",
         { useNewUrlParser: true }
     )
     .then(() => console.log("MongoDb is connected"))
