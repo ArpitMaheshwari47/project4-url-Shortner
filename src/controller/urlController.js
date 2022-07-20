@@ -1,6 +1,29 @@
 const shortid = require("shortid");
 const urlModel = require("../model/urlModel");
+const redis = require("redis");
+const { response } = require("express");
 
+const { promisify } = require("util");
+//--------------------------------Connect to redis------------------------------------
+const redisClient = redis.createClient(
+  13190,
+  "redis-13190.c301.ap-south-1-1.ec2.cloud.redislabs.com",
+  { no_ready_check: true }
+);
+redisClient.auth("gkiOIPkytPI3ADi14jHMSWkZEo2J5TDG", function (error) {
+  if (error) throw error;
+});
+
+redisClient.on("connect", async function () {
+  console.log("Connected to Redis..");
+});
+
+//Connection setup for redis
+
+const SET_ASYNC = promisify(redisClient.SET).bind(redisClient);
+const GET_ASYNC = promisify(redisClient.GET).bind(redisClient);
+
+//------------------------------------validation---------------------------------------
 const isValid = function (value) {
   if (typeof value === "undefined" || typeof value === "null") {
     return false;
@@ -58,18 +81,31 @@ const createurl = async function (req, res) {
       .findOne({ longUrl })
       .select({ urlCode: 1, _id: 0 });
     if (url) {
-      return res
-        .status(201)
-        .send({
-          status: true,
-          msg: `${longUrl} is already registered`,
-          data: url,
-        });
+      await SET_ASYNC(`${longUrl}`, JSON.stringify(url));
+      return res.status(201).send({
+        status: true,
+        msg: `${longUrl} is already registered`,
+        data: url,
+      });
     }
+        //------------------------findInCache------------
+        const findInCache = await GET_ASYNC(`${longUrl}`);
+        if (findInCache) {
+          let data = JSON.parse(findInCache);
+          return res
+            .status(200)
+            .send({
+              status: true,
+              message: "Entry from cache",
+              shortUrl: data.shortUrl,
+            });
+        }
 
     const shortUrl = baseUrl + "/" + urlCode;
     const urlData = { urlCode, longUrl, shortUrl };
     const newurl = await urlModel.create(urlData);
+    await SET_ASYNC(`${longUrl}`, JSON.stringify(newurl));
+    await SET_ASYNC(`${urlCode}`, JSON.stringify(newurl));
 
     let currentUrl = {
       urlCode: newurl.urlCode,
@@ -94,9 +130,13 @@ const geturl = async function (req, res) {
     if (!checkUrlCodevalid) {
       return res.status(404).send({ status: false, msg: "Invalid UrlCode" });
     } else {
+      await SET_ASYNC(`${urlCode}`, JSON.stringify(checkUrlCodevalid));
+
       return res.redirect(302, checkUrlCodevalid.longUrl);
     }
-  } catch (error) {}
+  } catch (error) {
+    res.status(500).send({ status: false, msg: "Server Error" });
+  }
 };
 
 module.exports = {
