@@ -34,14 +34,9 @@ const isValid = function (value) {
     return true;
   }
 };
-
-const isValidRequestBody = function (requestBody) {
-  return Object.keys(requestBody).length > 0;
-};
-
 const createurl = async function (req, res) {
   try {
-    if (!isValidRequestBody(req.body)) {
+    if (Object.keys(req.body).length == 0) {
       return res.status(400).send({
         status: false,
         message: "Invalid request parameters. Please provide URL details",
@@ -56,18 +51,27 @@ const createurl = async function (req, res) {
 
     const longUrl = req.body.longUrl.trim();
 
-    // if (
-    //   !/^(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!(?:10|127)(?:\.\d{1,3}){3})(?!(?:169\.254|192\.168)(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]-*)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,}))\.?)(?::\d{2,5})?(?:[/?#]\S*)?$/i.test(
-    //     longUrl
-    //   )
-    if(!(/(:?^((https|http|HTTP|HTTPS){1}:\/\/)(([w]{3})[\.]{1})?([a-zA-Z0-9]{1,}[\.])[\w]*((\/){1}([\w@?^=%&amp;~+#-_.]+))*)$/.test(longUrl))
-    )
 
-    {
+    if (!(/(:?^((https|http|HTTP|HTTPS){1}:\/\/)(([w]{3})[\.]{1})?([a-zA-Z0-9]{1,}[\.])[\w]*((\/){1}([\w@?^=%&amp;~+#-_.]+))*)$/.test(longUrl))
+    ) {
       return res.status(400).send({
         status: false,
         message: "Invalid URL Format",
       });
+    }
+
+    //------------------------findInCache------------
+    const findInCache = await GET_ASYNC(`${longUrl}`);
+    if (findInCache) {
+      let data = JSON.parse(findInCache);
+      return res
+        .status(200)
+        .send({
+          status: true,
+          msg: `${longUrl} is already registered and coming from cache`,
+          shortUrl: data.shortUrl,
+        });
+
     }
 
     const baseUrl = "http://localhost:3000";
@@ -81,31 +85,15 @@ const createurl = async function (req, res) {
     let url = await urlModel
       .findOne({ longUrl })
       .select({ shortUrl: 1, _id: 0 });
-      // console.log(url)
+
     if (url) {
       await SET_ASYNC(`${longUrl}`, JSON.stringify(url));
       return res.status(201).send({
         status: true,
         msg: `${longUrl} is already registered`,
-        data: url,
+        data: url
       });
     }
-    // console.log(url)
-    //------------------------findInCache------------
-    const findInCache = await GET_ASYNC(`${longUrl}`);
-    console.log(findInCache)
-    if (findInCache) {
-      let data = JSON.parse(findInCache);
-      console.log(data)
-      return res
-        .status(200)
-        .send({
-          status: true,
-          message: "Entry from cache",
-          shortUrl: data.shortUrl,
-        });
-        
-      }
 
     const shortUrl = baseUrl + "/" + urlCode;
     const urlData = { urlCode, longUrl, shortUrl };
@@ -125,20 +113,29 @@ const createurl = async function (req, res) {
   }
 };
 
+//------------------------------------------geturl-------------------------------------------
 const geturl = async function (req, res) {
   try {
-    let urlCode = req.params.urlCode;
+    let urlData = req.params.urlCode;
+    const urlCode = urlData
+      .split("")
+      .map((a) => a.trim())
+      .join("");
     if (!urlCode) {
       res.status(400).send({ status: false, msg: "please provide UrlCode" });
     }
-
-    let checkUrlCodevalid = await urlModel.findOne({ urlCode });
-    if (!checkUrlCodevalid) {
-      return res.status(404).send({ status: false, msg: "shortUrl not found" });
+    let cachedUrlDataTwo = await GET_ASYNC(`${urlCode}`);
+    let cachedUrlDataThree = JSON.parse(cachedUrlDataTwo);
+    if (cachedUrlDataThree) {
+      res.redirect(302, cachedUrlDataThree["longUrl"]);
     } else {
+      let checkUrlCodevalid = await urlModel.findOne({ urlCode: urlCode })
+        .select({ longUrl: 1 });
+      if (!checkUrlCodevalid) {
+        return res.status(404).send({ status: false, msg: "shortUrl not found" });
+      }
       await SET_ASYNC(`${urlCode}`, JSON.stringify(checkUrlCodevalid));
-
-      return res.redirect(302, checkUrlCodevalid.longUrl);
+      res.redirect(302, checkUrlCodevalid.longUrl);
     }
   } catch (error) {
     res.status(500).send({ status: false, msg: "Server Error" });
