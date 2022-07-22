@@ -64,19 +64,26 @@ const createurl = async function (req, res) {
     const findInCache = await GET_ASYNC(`${longUrl}`);
     if (findInCache) {
       let data = JSON.parse(findInCache);
+      let finaldata= {
+        longUrl:data.longUrl,
+        shortUrl:data.shortUrl,
+        urlCode:data.urlCode
+      }
       return res
         .status(200)
         .send({
           status: true,
-          msg: `${longUrl} is already registered and coming from cache`,
-          shortUrl: data.shortUrl,
+          msg: `longUrl is already registered and coming from cache`,
+          data: finaldata,
         });
 
     }
-
+  //if url is not find in cashe memory
     let url = await urlModel
       .findOne({ longUrl })
       .select({ shortUrl: 1, _id: 0 });
+     
+
 
     if (url) {
       await SET_ASYNC(`${longUrl}`, JSON.stringify(url));
