@@ -74,14 +74,6 @@ const createurl = async function (req, res) {
 
     }
 
-    const baseUrl = "http://localhost:3000";
-
-    let urlCode = shortid
-      .generate()
-      .match(/[a-z\A-Z]/g)
-      .join("");
-    urlCode = urlCode.toLowerCase();
-
     let url = await urlModel
       .findOne({ longUrl })
       .select({ shortUrl: 1, _id: 0 });
@@ -90,14 +82,23 @@ const createurl = async function (req, res) {
       await SET_ASYNC(`${longUrl}`, JSON.stringify(url));
       return res.status(201).send({
         status: true,
-        msg: `${longUrl} is already registered`,
+        msg: `${longUrl} is already registered is coming from DB`,
         data: url
       });
     }
+    //if we not get shoturl link in DB then we create new shortUrl link 
+    const baseUrl = "http://localhost:3000";
+    
+    let urlCode = shortid
+      .generate()
+      .match(/[a-z\A-Z]/g)
+      .join("");
+    urlCode = urlCode.toLowerCase();
 
     const shortUrl = baseUrl + "/" + urlCode;
     const urlData = { urlCode, longUrl, shortUrl };
     const newurl = await urlModel.create(urlData);
+    //SET in cashe memory 
     await SET_ASYNC(`${longUrl}`, JSON.stringify(newurl));
     await SET_ASYNC(`${urlCode}`, JSON.stringify(newurl));
 
@@ -106,7 +107,7 @@ const createurl = async function (req, res) {
       longUrl: newurl.longUrl,
       shortUrl: newurl.shortUrl,
     };
-    return res.status(201).send({ data: currentUrl });
+    return res.status(201).send({ status: true, msg: "shortUrl successful generated ",data: currentUrl });
   } catch (err) {
     console.log(err);
     res.status(500).send({ status: false, msg: "Server Error" });
